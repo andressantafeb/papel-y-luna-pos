@@ -1,0 +1,28 @@
+{
+  "name": "papel-y-luna-pos-backend",
+  "version": "1.0.0",
+  "description": "API REST del POS Papel y Luna (MVP 3) - Node.js, Express y PostgreSQL",
+  "private": true,
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "db:init": "node scripts/initDb.js",
+    "db:reset": "node scripts/initDb.js --reset",
+    "db:seed": "node scripts/seed.js",
+    "db:setup": "node scripts/initDb.js && node scripts/seed.js",
+    "smoke": "node scripts/smoke.js",
+    "smoke:abonos": "node scripts/smokeAbonos.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.12.0"
+  }
+}
