@@ -83,13 +83,18 @@ async function parte2(ctx) {
   const { ta, tc, pid, clienteId, descuentoId } = ctx;
   escribir('== Ventas, cierre e inventario');
   const v = await llamar('POST', '/api/ventas', { items: [{ productoId: pid, cantidad: 2 }], descuentoId }, tc);
-  verificar('crear venta abierta: subtotal 2000, descuento 200, total 1800', v.status === 201 && v.data.subtotal === 2000 && v.data.descuentoMonto === 200 && v.data.total === 1800, v);
+  verificar('crear venta abierta: productos 2000, descuento 200, IVA 19% = 342, total 2142',
+    v.status === 201 && v.data.subtotal === 2000 && v.data.descuentoMonto === 200 && v.data.ivaPorcentaje === 19 && v.data.ivaMonto === 342 && v.data.total === 2142, v);
   const vid = v.data.id;
   ctx.vid = vid;
   verificar('venta abierta no descuenta stock', (await stockDe(ta, pid)) === 10);
   verificar('efectivo insuficiente -> 400', (await llamar('POST', `/api/ventas/${vid}/cerrar`, { metodoPago: 'Efectivo', recibido: 1000 }, tc)).status === 400);
-  const cierre = await llamar('POST', `/api/ventas/${vid}/cerrar`, { metodoPago: 'Efectivo', recibido: 2000 }, tc);
-  verificar('cerrar en efectivo: cambio 200', cierre.status === 200 && cierre.data.estado === 'cerrada' && cierre.data.cambio === 200, cierre);
+  verificar('efectivo sin IVA (1800 < 2142) -> 400', (await llamar('POST', `/api/ventas/${vid}/cerrar`, { metodoPago: 'Efectivo', recibido: 2000 }, tc)).status === 400);
+  verificar('total enviado sin IVA (1800) no coincide con el recalculado -> 409',
+    (await llamar('POST', `/api/ventas/${vid}/cerrar`, { metodoPago: 'Efectivo', recibido: 3000, total: 1800 }, tc)).status === 409);
+  const cierre = await llamar('POST', `/api/ventas/${vid}/cerrar`, { metodoPago: 'Efectivo', recibido: 3000, total: 2142 }, tc);
+  verificar('cerrar en efectivo con total 2142 (IVA incluido): cambio 858 y total guardado',
+    cierre.status === 200 && cierre.data.estado === 'cerrada' && cierre.data.cambio === 858 && cierre.data.total === 2142 && cierre.data.ivaMonto === 342, cierre);
   verificar('cierre descuenta stock (8)', (await stockDe(ta, pid)) === 8);
   verificar('no cierra dos veces -> 409', (await llamar('POST', `/api/ventas/${vid}/cerrar`, { metodoPago: 'Transferencia' }, tc)).status === 409);
 
@@ -113,7 +118,8 @@ async function parte3(ctx) {
   escribir('== Corrección de ventas cerradas');
   verificar('cajero NO corrige -> 403', (await llamar('PUT', `/api/ventas/${vid}/correccion`, { items: [{ productoId: pid, cantidad: 3 }] }, tc)).status === 403);
   const cor = await llamar('PUT', `/api/ventas/${vid}/correccion`, { items: [{ productoId: pid, cantidad: 3 }], metodoPago: 'Transferencia' }, ta);
-  verificar('corrección: 3 uds, total 2700, marcada como corregida', cor.status === 200 && cor.data.total === 2700 && cor.data.corregida && cor.data.corregidaPorNombre === 'Administrador', cor);
+  verificar('corrección: 3 uds, total 3213 (2700 + IVA 513), marcada como corregida',
+    cor.status === 200 && cor.data.total === 3213 && cor.data.ivaMonto === 513 && cor.data.corregida && cor.data.corregidaPorNombre === 'Administrador', cor);
   verificar('corrección ajusta stock por diferencia (6)', (await stockDe(ta, pid)) === 6);
   verificar('corrección que deja stock negativo -> 409', (await llamar('PUT', `/api/ventas/${vid}/correccion`, { items: [{ productoId: pid, cantidad: 100 }] }, ta)).status === 409);
   verificar('stock intacto tras rechazo (6)', (await stockDe(ta, pid)) === 6);
@@ -122,20 +128,20 @@ async function parte3(ctx) {
   const parcial = { tipo: 'parcial', items: [{ productoId: pid, cantidad: 1, retornaInventario: true }] };
   verificar('cajero NO reembolsa -> 403', (await llamar('POST', `/api/ventas/${vid}/reembolsos`, parcial, tc)).status === 403);
   const prev = await llamar('POST', `/api/ventas/${vid}/reembolsos/previsualizar`, parcial, ta);
-  verificar('vista previa respeta el descuento (900)', prev.status === 200 && prev.data.monto === 900, prev);
+  verificar('vista previa respeta el descuento y el IVA (1071)', prev.status === 200 && prev.data.monto === 1071, prev);
   const r1 = await llamar('POST', `/api/ventas/${vid}/reembolsos`, parcial, ta);
-  verificar('reembolso parcial: 900, venta "parcial"', r1.status === 201 && r1.data.reembolso.monto === 900 && r1.data.venta.estadoReembolso === 'parcial', r1);
+  verificar('reembolso parcial: 1071, venta "parcial"', r1.status === 201 && r1.data.reembolso.monto === 1071 && r1.data.venta.estadoReembolso === 'parcial', r1);
   verificar('reembolso con retorno suma stock (7)', (await stockDe(ta, pid)) === 7);
   verificar('más de lo vendido -> 409', (await llamar('POST', `/api/ventas/${vid}/reembolsos`, { tipo: 'parcial', items: [{ productoId: pid, cantidad: 5, retornaInventario: true }] }, ta)).status === 409);
   const r2 = await llamar('POST', `/api/ventas/${vid}/reembolsos`, { tipo: 'total', retornaInventario: false }, ta);
-  verificar('reembolso total del resto: 1800, venta "total"', r2.status === 201 && r2.data.reembolso.monto === 1800 && r2.data.venta.estadoReembolso === 'total', r2);
+  verificar('reembolso total del resto: 2142, venta "total"', r2.status === 201 && r2.data.reembolso.monto === 2142 && r2.data.venta.estadoReembolso === 'total', r2);
   verificar('sin retorno no cambia stock (7)', (await stockDe(ta, pid)) === 7);
   verificar('no corrige venta con reembolsos -> 409', (await llamar('PUT', `/api/ventas/${vid}/correccion`, { clienteId }, ta)).status === 409);
 
   escribir('== Descuento eliminado, historial, kardex');
   await llamar('DELETE', `/api/descuentos/${descuentoId}`, null, ta);
   const f = await llamar('GET', `/api/ventas/${vid}`, null, tc);
-  verificar('eliminar descuento no altera ventas', f.data.descuento && f.data.total === 2700 && f.data.reembolsos.length === 2, f.data);
+  verificar('eliminar descuento no altera ventas', f.data.descuento && f.data.total === 3213 && f.data.reembolsos.length === 2, f.data);
   const hist = await llamar('GET', `/api/ventas?estado=cerrada&metodoPago=Transferencia&desde=${hoy()}&hasta=${hoy()}`, null, tc);
   verificar('historial filtrado por fecha, estado y pago', hist.status === 200 && hist.data.some((x) => x.id === vid), hist.data.length);
   const tipos = (await llamar('GET', `/api/inventario/productos/${pid}/movimientos`, null, tc)).data.movimientos.map((m) => m.tipo);

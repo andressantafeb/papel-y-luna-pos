@@ -267,3 +267,11 @@ ALTER TABLE abonos ADD CONSTRAINT abono_metodo_pago_valido
   CHECK (metodo_pago IN ('Efectivo', 'Transferencia', 'Tarjeta'));
 ALTER TABLE abonos ADD CONSTRAINT abono_billetera_coherente
   CHECK (billetera IS NULL OR metodo_pago = 'Transferencia');
+
+-- ---------- IVA (19 %) ----------
+-- Los precios del catálogo son base (sin IVA). La venta guarda la tasa aplicada y el monto del IVA, calculado sobre
+-- (subtotal - descuento_monto); `total` ya incluye el IVA. Idempotente y sin pérdida de datos: las ventas anteriores
+-- quedan con tasa 0 (su total no cambia) y la factura las muestra con el formato anterior.
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS iva_porcentaje NUMERIC(5,2)  NOT NULL DEFAULT 0 CHECK (iva_porcentaje >= 0 AND iva_porcentaje <= 100);
+ALTER TABLE ventas ADD COLUMN IF NOT EXISTS iva_monto      NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (iva_monto >= 0);
+

@@ -19,9 +19,10 @@ async function crearAbierta(client, usuario, { items, clienteId, descuentoId }) 
 
   const { rows } = await client.query(
     `INSERT INTO ventas (estado, cliente_id, descuento_id, descuento_nombre, descuento_tipo, descuento_valor,
-                         subtotal, descuento_monto, total, usuario_id)
-     VALUES ('abierta', $1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
-    [clienteId || null, d.id, d.nombre, d.tipo, d.valor, totales.subtotal, totales.descuentoMonto, totales.total, usuario.id]
+                         subtotal, descuento_monto, iva_porcentaje, iva_monto, total, usuario_id)
+     VALUES ('abierta', $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id`,
+    [clienteId || null, d.id, d.nombre, d.tipo, d.valor, totales.subtotal, totales.descuentoMonto,
+      totales.ivaPorcentaje, totales.ivaMonto, totales.total, usuario.id]
   );
   await reemplazarLineas(client, rows[0].id, lineas);
   return rows[0].id;
@@ -54,9 +55,11 @@ async function actualizarAbierta(client, ventaId, { items, clienteId, descuentoI
 
   await client.query(
     `UPDATE ventas SET cliente_id = $2, descuento_id = $3, descuento_nombre = $4, descuento_tipo = $5,
-            descuento_valor = $6, subtotal = $7, descuento_monto = $8, total = $9, updated_at = NOW()
+            descuento_valor = $6, subtotal = $7, descuento_monto = $8, iva_porcentaje = $9, iva_monto = $10, total = $11,
+            updated_at = NOW()
       WHERE id = $1`,
-    [ventaId, clienteFinal || null, d.id, d.nombre, d.tipo, d.valor, totales.subtotal, totales.descuentoMonto, totales.total]
+    [ventaId, clienteFinal || null, d.id, d.nombre, d.tipo, d.valor, totales.subtotal, totales.descuentoMonto,
+      totales.ivaPorcentaje, totales.ivaMonto, totales.total]
   );
   await reemplazarLineas(client, ventaId, lineas);
 }
@@ -93,6 +96,10 @@ async function cerrar(client, usuario, ventaId, pago) {
     descuento = { id: null, nombre: venta.descuentoNombre, tipo: venta.descuentoTipo, valor: venta.descuentoValor };
   }
   const totales = calcularTotales(lineas, descuento);
+  // El total con IVA que vio el cajero debe ser el recalculado: si cambiaron precios o descuento, no se cobra a ciegas.
+  if (pago.totalEsperado !== undefined && pago.totalEsperado !== null && Math.abs(pago.totalEsperado - totales.total) > 0.009) {
+    throw conflict(`El total de la venta cambió a ${totales.total} (precios o descuento actualizados). Cierra el cobro, revisa el ticket y vuelve a intentarlo.`);
+  }
   const cobro = resolverPago({ ...pago, clienteId: clienteFinal }, totales.total);
   const d = snapshotDescuento(descuento);
 
@@ -105,11 +112,12 @@ async function cerrar(client, usuario, ventaId, pago) {
   await client.query(
     `UPDATE ventas SET estado = 'cerrada', cliente_id = $2, metodo_pago = $3, recibido = $4, cambio = $5,
             descuento_id = $6, descuento_nombre = $7, descuento_tipo = $8, descuento_valor = $9,
-            subtotal = $10, descuento_monto = $11, total = $12,
-            abono_inicial = $13, metodo_abono = $14, billetera = $15, cerrada_en = NOW(), updated_at = NOW()
+            subtotal = $10, descuento_monto = $11, iva_porcentaje = $12, iva_monto = $13, total = $14,
+            abono_inicial = $15, metodo_abono = $16, billetera = $17, cerrada_en = NOW(), updated_at = NOW()
       WHERE id = $1`,
     [ventaId, clienteFinal || null, cobro.metodoPago, cobro.recibido, cobro.cambio,
-      d.id, d.nombre, d.tipo, d.valor, totales.subtotal, totales.descuentoMonto, totales.total,
+      d.id, d.nombre, d.tipo, d.valor, totales.subtotal, totales.descuentoMonto, totales.ivaPorcentaje, totales.ivaMonto,
+      totales.total,
       cobro.abonoInicial, cobro.metodoAbono, cobro.billetera]
   );
   await registrarAbonoInicial(client, usuario, ventaId, clienteFinal, cobro);
@@ -210,12 +218,13 @@ async function corregir(client, usuario, ventaId, datos) {
   await client.query(
     `UPDATE ventas SET cliente_id = $2, metodo_pago = $3, recibido = $4, cambio = $5,
             descuento_id = $6, descuento_nombre = $7, descuento_tipo = $8, descuento_valor = $9,
-            subtotal = $10, descuento_monto = $11, total = $12,
-            abono_inicial = $13, metodo_abono = $14, billetera = $15,
-            corregida = TRUE, corregida_por = $16, corregida_en = NOW(), updated_at = NOW()
+            subtotal = $10, descuento_monto = $11, iva_porcentaje = $12, iva_monto = $13, total = $14,
+            abono_inicial = $15, metodo_abono = $16, billetera = $17,
+            corregida = TRUE, corregida_por = $18, corregida_en = NOW(), updated_at = NOW()
       WHERE id = $1`,
     [ventaId, clienteFinal || null, cobro.metodoPago, cobro.recibido, cobro.cambio,
-      d.id, d.nombre, d.tipo, d.valor, totales.subtotal, totales.descuentoMonto, totales.total,
+      d.id, d.nombre, d.tipo, d.valor, totales.subtotal, totales.descuentoMonto, totales.ivaPorcentaje, totales.ivaMonto,
+      totales.total,
       cobro.abonoInicial, cobro.metodoAbono, cobro.billetera, usuario.id]
   );
   // Solo se crea el abono inicial si la venta no tenía abonos (si los tenía, se conservan tal cual).

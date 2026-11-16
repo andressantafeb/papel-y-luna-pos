@@ -35,18 +35,19 @@ async function descuentos(ctx) {
   // Uso: el cajero aplica el descuento y el total respeta el valor vigente.
   const v = await llamar('POST', '/api/ventas', { items: [{ productoId: pid, cantidad: 2 }], descuentoId: id }, tc);
   estado.ids.ventas.push(v.data.id);
-  verificar('cajero aplica el descuento: 2000 - 20% = 1600', v.status === 201 && v.data.total === 1600 && v.data.descuentoMonto === 400, v);
+  verificar('cajero aplica el descuento: 2000 - 20% = 1600 + IVA 304 = 1904',
+    v.status === 201 && v.data.total === 1904 && v.data.ivaMonto === 304 && v.data.descuentoMonto === 400, v);
   const grande = await llamar('POST', '/api/ventas', { items: [{ productoId: pid, cantidad: 1 }], descuentoId: f.data.id }, tc);
   verificar('descuento fijo mayor al total -> 400 (sin totales negativos)', grande.status === 400, grande);
   const cierre = await llamar('POST', `/api/ventas/${v.data.id}/cerrar`, { metodoPago: 'Tarjeta' }, tc);
-  verificar('la venta con descuento cierra', cierre.status === 200 && cierre.data.total === 1600, cierre);
+  verificar('la venta con descuento cierra', cierre.status === 200 && cierre.data.total === 1904, cierre);
 
   // Eliminar el descuento no altera la venta ya registrada.
   verificar('cajero NO elimina -> 403', (await llamar('DELETE', `/api/descuentos/${id}`, null, tc)).status === 403);
   verificar('admin elimina el descuento', (await llamar('DELETE', `/api/descuentos/${id}`, null, ta)).status === 200);
   const despues = (await llamar('GET', `/api/ventas/${v.data.id}`, null, tc)).data;
   verificar('la venta conserva el descuento y el total tras eliminarlo',
-    despues.total === 1600 && despues.descuento && despues.descuento.nombre === d.data.nombre, despues.descuento);
+    despues.total === 1904 && despues.descuento && despues.descuento.nombre === d.data.nombre, despues.descuento);
   verificar('el cajero ya no lo ve en el catálogo', !(await llamar('GET', '/api/descuentos', null, tc)).data.some((x) => x.id === id));
   verificar('eliminar uno inexistente -> 404', (await llamar('DELETE', `/api/descuentos/${id}`, null, ta)).status === 404);
   return ctx;

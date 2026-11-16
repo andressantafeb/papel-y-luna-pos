@@ -1,5 +1,6 @@
 const { badRequest } = require('../utils/httpError');
 const { redondear } = require('../utils/validators');
+const { IVA_PORCENTAJE } = require('../utils/impuestos');
 
 async function cargarProductos(client, ids) {
   if (!ids.length) return new Map();
@@ -37,7 +38,10 @@ async function cargarDescuento(client, descuentoId) {
   return rows[0];
 }
 
-/** Subtotal, monto de descuento y total. Rechaza totales negativos (RF-19). */
+/**
+ * Subtotal (suma de líneas), descuento, IVA y total. Rechaza totales negativos (RF-19).
+ * Los precios del catálogo son base (sin IVA): base = subtotal - descuento, IVA = base x 19 %, total = base + IVA.
+ */
 function calcularTotales(lineas, descuento) {
   const subtotal = redondear(lineas.reduce((suma, l) => suma + l.subtotal, 0));
   let descuentoMonto = 0;
@@ -49,7 +53,9 @@ function calcularTotales(lineas, descuento) {
       throw badRequest(`El descuento "${descuento.nombre}" supera el valor de la venta y dejaría el total en negativo.`);
     }
   }
-  return { subtotal, descuentoMonto, total: redondear(subtotal - descuentoMonto) };
+  const base = redondear(subtotal - descuentoMonto);
+  const ivaMonto = redondear((base * IVA_PORCENTAJE) / 100);
+  return { subtotal, descuentoMonto, base, ivaPorcentaje: IVA_PORCENTAJE, ivaMonto, total: redondear(base + ivaMonto) };
 }
 
 async function verificarCliente(client, clienteId) {

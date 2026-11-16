@@ -6,7 +6,7 @@ async function metodosDePago(ctx) {
   const { ta, tc, pid, cid } = ctx;
   escribir('== Métodos de pago');
   const cerrar = (id, cuerpo) => llamar('POST', `/api/ventas/${id}/cerrar`, cuerpo, tc);
-  const nueva = () => crearVenta(tc, pid, 1); // total 1000
+  const nueva = () => crearVenta(tc, pid, 1); // total 1190 (1000 + IVA 19%)
 
   const vTransf = await nueva();
   verificar('método obsoleto o desconocido -> 400', (await cerrar(vTransf, { metodoPago: 'Cheque' })).status === 400);
@@ -32,7 +32,7 @@ async function metodosDePago(ctx) {
 
   const v5 = await nueva();
   const ef = await cerrar(v5, { metodoPago: 'Efectivo', recibido: 2000, billetera: 'Nu' });
-  verificar('Efectivo: cambio 1000 y sin billetera', ef.status === 200 && ef.data.cambio === 1000 && ef.data.billetera === null, ef);
+  verificar('Efectivo: cambio 810 (2000 - 1190) y sin billetera', ef.status === 200 && ef.data.cambio === 810 && ef.data.billetera === null, ef);
 
   // Corrección (administrador): la billetera se conserva, se reemplaza o se limpia según el método final.
   const corregir = (cuerpo) => llamar('PUT', `/api/ventas/${vTransf}/correccion`, cuerpo, ta);
@@ -56,9 +56,9 @@ async function debeConTransferencia(ctx) {
   const { tc, pid, cid } = ctx;
   escribir('== Debe con abono por Transferencia o Tarjeta');
   const cerrar = (id, cuerpo) => llamar('POST', `/api/ventas/${id}/cerrar`, cuerpo, tc);
-  const v = await crearVenta(tc, pid, 3); // total 3000
+  const v = await crearVenta(tc, pid, 3); // total 3570 (3000 + IVA 19% = 570)
   const r = await cerrar(v, { metodoPago: 'Debe', clienteId: cid, abonoInicial: 1000, metodoAbono: 'Transferencia', billetera: 'Nu' });
-  verificar('Debe + abono por Transferencia (Nu): saldo 2000', r.status === 200 && r.data.metodoAbono === 'Transferencia' && r.data.billetera === 'Nu' && r.data.saldoPendiente === 2000, r);
+  verificar('Debe + abono por Transferencia (Nu): saldo 2570', r.status === 200 && r.data.metodoAbono === 'Transferencia' && r.data.billetera === 'Nu' && r.data.saldoPendiente === 2570, r);
   verificar('el abono inicial guarda la billetera', r.data.abonos.length === 1 && r.data.abonos[0].metodoPago === 'Transferencia' && r.data.abonos[0].billetera === 'Nu', r.data.abonos);
 
   const ruta = `/api/cuentas-por-cobrar/clientes/${cid}/abonos`;

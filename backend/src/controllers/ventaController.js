@@ -90,7 +90,8 @@ function leerAbonoInicial(body) {
   return { abonoInicial, metodoAbono, billetera: body.billetera };
 }
 
-// POST /api/ventas/:id/cerrar  { metodoPago, recibido?, clienteId?, billetera?, abonoInicial?, metodoAbono? }
+// POST /api/ventas/:id/cerrar  { metodoPago, total?, recibido?, clienteId?, billetera?, abonoInicial?, metodoAbono? }
+// `total` (con IVA incluido) es opcional: si se envía y no coincide con el total recalculado, responde 409.
 const cerrar = asyncHandler(async (req, res) => {
   const id = idParam(req.params.id);
   await ventaOrNotFound(req, id);
@@ -98,6 +99,8 @@ const cerrar = asyncHandler(async (req, res) => {
     metodoPago: opcion(req.body?.metodoPago, 'metodoPago', METODOS),
     recibido: req.body?.recibido,
     clienteId: idOpcional(req.body?.clienteId, 'clienteId'),
+    // Total con IVA que vio el cajero: el servicio lo compara con el recalculado y rechaza (409) si no coincide.
+    totalEsperado: numero(req.body?.total, 'total', { min: 0, requerido: false }) ?? undefined,
     ...leerAbonoInicial(req.body || {})
   };
   await withTransaction((client) => ventaService.cerrar(client, req.usuario, id, pago));
