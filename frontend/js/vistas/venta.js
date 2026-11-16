@@ -225,7 +225,8 @@ export async function montar(cont, usuario) {
         await guardarAbierta(est);
         let venta;
         try {
-          venta = await post(`/ventas/${est.ventaId}/cerrar`, pago);
+          // Se envía el total con IVA que vio el cajero; el backend lo recalcula y rechaza si no coincide.
+          venta = await post(`/ventas/${est.ventaId}/cerrar`, { ...pago, total: t.total });
         } catch (err) {
           if (err.status === 409) refrescarProductos(); // stock insuficiente u otro conflicto: muestra el stock real
           throw err;

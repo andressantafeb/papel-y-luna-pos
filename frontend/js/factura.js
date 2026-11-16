@@ -16,6 +16,25 @@ function htmlCredito(v) {
   </div>`;
 }
 
+// Desglose de totales. Ventas con IVA: Subtotal (productos - descuento), IVA (19%) y Total.
+// Ventas anteriores al IVA (ivaPorcentaje 0): se conserva el formato original, su total no cambia.
+function htmlTotalesFactura(v) {
+  const descuento = v.descuento
+    ? `<p>Productos: ${moneda(v.subtotal)}</p><p>Descuento (${esc(v.descuento.nombre)}): -${moneda(v.descuentoMonto)}</p>`
+    : '';
+  if (!(v.ivaPorcentaje > 0)) {
+    return `${v.descuento ? `<div class="factura-pago"><p>Subtotal: ${moneda(v.subtotal)}</p><p>Descuento (${esc(v.descuento.nombre)}): -${moneda(v.descuentoMonto)}</p></div>` : ''}
+      <div class="factura-total"><span>Total</span><strong>${moneda(v.total)}</strong></div>`;
+  }
+  const subtotal = v.subtotal - (v.descuentoMonto || 0);
+  return `${descuento ? `<div class="factura-pago">${descuento}</div>` : ''}
+      <div class="factura-desglose">
+        <div><span>Subtotal</span><span>${moneda(subtotal)}</span></div>
+        <div><span>IVA (${v.ivaPorcentaje}%)</span><span>${moneda(v.ivaMonto)}</span></div>
+      </div>
+      <div class="factura-total"><span>Total</span><strong>${moneda(v.total)}</strong></div>`;
+}
+
 export function htmlFactura(v) {
   const reembolsos = v.reembolsos || [];
   return `
@@ -37,8 +56,7 @@ export function htmlFactura(v) {
         <thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th></tr></thead>
         <tbody>${v.items.map((i) => `<tr><td>${esc(i.nombre)}</td><td>${i.cantidad}</td><td>${moneda(i.precio)}</td><td>${moneda(i.subtotal)}</td></tr>`).join('')}</tbody>
       </table>
-      ${v.descuento ? `<div class="factura-pago"><p>Subtotal: ${moneda(v.subtotal)}</p><p>Descuento (${esc(v.descuento.nombre)}): -${moneda(v.descuentoMonto)}</p></div>` : ''}
-      <div class="factura-total"><span>Total</span><strong>${moneda(v.total)}</strong></div>
+      ${htmlTotalesFactura(v)}
       ${v.metodoPago === 'Efectivo' ? `<div class="factura-pago"><p>Recibido: ${moneda(v.recibido)}</p><p>Cambio: ${moneda(v.cambio)}</p></div>` : ''}
       ${v.metodoPago === 'Debe' ? htmlCredito(v) : ''}
       ${reembolsos.length ? `<div class="bloque-reembolsos"><strong>Reembolsos</strong>${reembolsos.map((r) => `

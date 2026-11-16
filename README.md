@@ -103,6 +103,10 @@ Los errores responden `{ "error": "mensaje" }` con el código HTTP correspondien
 - **Correcciones:** la venta conserva su id y queda marcada con quién y cuándo la corrigió; el stock se ajusta por la diferencia entre lo original y lo corregido.
 - **Reembolsos:** respetan el descuento de forma proporcional; cada producto indica si vuelve al inventario. No se puede corregir una venta que ya tiene reembolsos.
 - **Descuentos:** la venta guarda una copia del descuento, así que editar o eliminar el descuento no altera ventas registradas.
+- **IVA (19 %):** los precios del catálogo son base (sin IVA). El IVA se calcula sobre `subtotal - descuento` y se suma al total: `total = base + IVA`. La tasa vive en `backend/src/utils/impuestos.js` (y su copia visual en `frontend/js/iva.js`; deben coincidir). El ticket muestra **Subtotal**, **IVA (19%)** y **Total a pagar**, y el comprobante/PDF muestra el mismo desglose.
+  - La venta guarda `subtotal` (suma de productos), `descuento_monto`, `iva_porcentaje`, `iva_monto` y `total` (con IVA). Todo el sistema (cambio en efectivo, abono inicial, saldo de Debe, reembolsos, reportes) usa ese `total`; los reembolsos devuelven el IVA de forma proporcional.
+  - `POST /ventas/:id/cerrar` acepta `total` (opcional, con IVA): si no coincide con el total que recalcula el servidor responde 409 y no cobra.
+  - **Migración:** `npm run db:init` agrega `iva_porcentaje` e `iva_monto` sin borrar datos. Las ventas anteriores quedan con IVA 0 (su total no cambia) y su comprobante conserva el formato anterior.
 - **Faltantes:** el nombre se normaliza (minúsculas, sin tildes, plural simple) para consolidar “Cofias” y “cofía”.
 - **Integridad:** no se eliminan categorías, proveedores, clientes ni productos con registros asociados.
 - **Ventas a crédito (Debe):**

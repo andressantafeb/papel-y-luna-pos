@@ -1,5 +1,6 @@
 // Estado y cálculos de la venta en curso (sin tocar el DOM). El backend vuelve a validar todo.
 import { post, put } from '../api.js';
+import { IVA_PORCENTAJE, redondear } from '../iva.js';
 
 export const normalizar = (t) => String(t ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 
@@ -13,16 +14,26 @@ export function descuentoActivo(est, descuentos) {
   return descuentos.find((d) => String(d.id) === String(est.descuentoId)) || (!est.descuentoId ? est.snapshot : null) || null;
 }
 
+/**
+ * Totales del ticket. Los precios del catálogo son base (sin IVA):
+ *  - productos: suma de precio x cantidad
+ *  - monto: descuento aplicado
+ *  - subtotal: productos - descuento (base gravable)
+ *  - iva: subtotal x 19 %
+ *  - total: subtotal + iva (lo que se cobra)
+ */
 export function calcularTotales(est, descuentos) {
-  const subtotal = est.items.reduce((suma, i) => suma + i.precio * i.cantidad, 0);
+  const productos = redondear(est.items.reduce((suma, i) => suma + i.precio * i.cantidad, 0));
   const descuento = descuentoActivo(est, descuentos);
   let monto = 0;
   let error = '';
   if (descuento) {
-    monto = descuento.tipo === 'porcentaje' ? Math.round(subtotal * descuento.valor) / 100 : descuento.valor;
-    if (monto > subtotal) { error = `El descuento "${descuento.nombre}" supera el valor de la venta.`; monto = 0; }
+    monto = descuento.tipo === 'porcentaje' ? redondear((productos * descuento.valor) / 100) : redondear(descuento.valor);
+    if (monto > productos) { error = `El descuento "${descuento.nombre}" supera el valor de la venta.`; monto = 0; }
   }
-  return { subtotal, descuento, monto, total: subtotal - monto, error };
+  const subtotal = redondear(productos - monto);
+  const iva = redondear((subtotal * IVA_PORCENTAJE) / 100);
+  return { productos, descuento, monto, subtotal, ivaPorcentaje: IVA_PORCENTAJE, iva, total: redondear(subtotal + iva), error };
 }
 
 /** Agrega una unidad del producto. Devuelve un mensaje de error o '' si todo salió bien. */

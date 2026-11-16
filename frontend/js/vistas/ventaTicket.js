@@ -25,10 +25,15 @@ export function htmlItems(items) {
     </div>`).join('');
 }
 
+// Desglose sobre el botón "Cobrar venta": Subtotal (productos - descuento), IVA y Total a pagar.
+// Si hay descuento, se muestran antes (en pequeño) la suma de productos y el descuento aplicado.
 export function htmlTotales(t) {
-  const detalle = t.descuento
-    ? `<div class="total-linea chica"><span>Subtotal</span><span>${moneda(t.subtotal)}</span></div>
+  const detalle = t.descuento && t.monto > 0
+    ? `<div class="total-linea chica"><span>Productos</span><span>${moneda(t.productos)}</span></div>
        <div class="total-linea chica"><span>Descuento (${esc(t.descuento.nombre)})</span><span>-${moneda(t.monto)}</span></div>`
     : '';
-  return `${detalle}<div class="total-linea"><span>Total</span><strong>${moneda(t.total)}</strong></div>`;
+  return `${detalle}
+    <div class="total-linea fila"><span>Subtotal</span><span id="vt-subtotal">${moneda(t.subtotal)}</span></div>
+    <div class="total-linea fila"><span>IVA (${t.ivaPorcentaje}%)</span><span id="vt-iva">${moneda(t.iva)}</span></div>
+    <div class="total-linea total-final"><span>Total a pagar</span><strong id="vt-total">${moneda(t.total)}</strong></div>`;
 }
