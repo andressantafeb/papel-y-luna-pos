@@ -15,6 +15,13 @@ app.use(express.json({ limit: '1mb' }));
 // `metodosPago` permite comprobar qué versión del código tiene cargada el proceso (si no coincide, hay que reiniciarlo).
 app.get('/api/health', (req, res) => res.json({ estado: 'ok', metodosPago: require('./utils/metodosPago').METODOS_PAGO }));
 
+// Ruta pública (sin autenticación ni token): autores del proyecto.
+app.get('/authors', (req, res) => res.json([
+  { nombre: 'Camila Sabogal', codigo: '371448' },
+  { nombre: 'Juan Ramirez', codigo: '371125' },
+  { nombre: 'Andres Santafe', codigo: '352369' }
+]));
+
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/ventas', require('./routes/ventaRoutes'));
 app.use('/api/inventario', require('./routes/inventarioRoutes'));
